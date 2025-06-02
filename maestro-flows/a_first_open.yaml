@@ -1,5 +1,7 @@
 appId: com.example.maestroDemo
 ---
+- tapOn:
+    id: "Maestro Demo"
 - assertVisible: "0"
 - tapOn: "Increment"
 - assertVisible: "1"
