@@ -1,0 +1,124 @@
+name: Maestro Tests on Existing APK
+
+on:
+    push:
+      tags:
+        - '*-TT'  
+
+jobs:
+  test:
+    runs-on: macos-13
+    timeout-minutes: 30  # Reduced timeout since we're not building
+    
+    env:
+      GIT_USERNAME: ${{ secrets.GIT_USERNAME }}
+      GIT_TOKEN: ${{ secrets.GIT_TOKEN }}
+
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+        
+      - name: Configure Git for private packages
+        run: |
+          git config --global url."https://${{ secrets.GIT_USERNAME }}:${{ secrets.GIT_TOKEN }}@github.com/".insteadOf "https://github.com/"
+    
+      # Install Maestro CLI
+      - name: Install Maestro
+        run: curl -Ls "https://get.maestro.mobile.dev" | bash 
+        
+      - name: Add Maestro to PATH
+        run: echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+        
+      - name: Verify Maestro installation
+        run: maestro --version
+
+      # Set up Java 17 for Android SDK and emulator
+      - name: Set up Java 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Install Allure for reporting
+      - name: Install Allure CLI
+        run: npm install -g allure-commandline@2.24.1
+
+      # Verify APK exists
+      - name: Verify APK exists
+        run: |
+          if [ ! -f "maestro-flows/drops.apk" ]; then
+            echo "Error: drops.apk not found in maestro-flows directory"
+            ls -la maestro-flows/
+            exit 1
+          else
+            echo "Found drops.apk in maestro-flows directory"
+            ls -la maestro-flows/drops.apk
+          fi
+
+      # Launch emulator, install APK, and run Maestro tests
+      - name: Run Emulator, Install APK & Maestro Flows
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29  # Using a more stable API level
+          arch: x86_64
+          target: google_apis
+          profile: pixel_7  # Using Pixel 7 device profile
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          avd-name: test-emulator
+          force-avd-creation: true
+          emulator-boot-timeout: 600  # 10 minutes
+          disable-spellchecker: true
+          script: |
+            echo "Emulator is running..."
+            echo "ADB devices:"
+            adb devices -l
+            
+            # Check APK file
+            echo "Checking APK file..."
+            ls -la maestro-flows/drops.apk
+            echo "APK file size: $(stat -f%z maestro-flows/drops.apk) bytes"
+            
+            # Install APK
+            echo "Installing APK..."
+            adb install -r maestro-flows/drops.apk
+          
+            
+            # Create results directory
+            echo "Creating results directory..."
+            mkdir -p allure-results
+            
+            # Check Maestro version
+            echo "Checking Maestro version..."
+            maestro --version
+            
+            # List Maestro flows
+            echo "Listing Maestro flows..."
+            ls -la maestro-flows/
+            
+            # Run Maestro tests
+            echo "Running Maestro tests..."
+            echo "Running test on file: maestro-flows/a_first_open.yaml"
+            maestro test --format junit --output allure-results/$(date +%s).xml maestro-flows/a_first_open.yaml
+            
+            # Check for test results
+            echo "Checking for test results..."
+            ls -la allure-results/ || echo "No test results found"
+            
+            echo "Tests completed successfully"
+     
+      # Generate Allure HTML dashboard
+      - name: Generate Allure report
+        run: |
+          allure generate --clean    # outputs to ./allure-report by default
+
+      # Deploy the dashboard to gh-pages
+      - name: Deploy Allure Dashboard to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GIT_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./allure-report
+          keep_files: false
