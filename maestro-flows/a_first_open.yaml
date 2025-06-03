@@ -1,7 +1,9 @@
-appId: com.example.maestroDemo
+appId: com.example.maestro_demo
 ---
-- tapOn: "Maestro Demo"
+- launchApp: appId
+- waitForAnimationToEnd
 - assertVisible: "0"
-- tapOn: "Increment"
+- tapOn:
+    id: "Increment"
 - assertVisible: "1"
 
