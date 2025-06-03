@@ -1,6 +1,7 @@
 appId: com.example.maestro_demo
 ---
-- launchApp: appId
+- launchApp: 
+    appId: com.example.maestro_demo
 - waitForAnimationToEnd
 - assertVisible: "0"
 - tapOn:
