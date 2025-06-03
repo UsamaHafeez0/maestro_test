@@ -63,18 +63,30 @@ jobs:
             
             # Run Maestro tests
             maestro test --format junit --output allure-results/$(date +%s).xml maestro-flows/a_first_open.yaml || true  # Continue even if tests fail
+            
+            # Verify test results were generated
+            echo "Verifying test results..."
+            ls -la allure-results/
      
       # Generate Allure HTML dashboard
       - name: Generate Allure report
         if: always()  # Run this step even if previous steps failed
-        run: allure generate --clean
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Listing contents:"
+          ls -la
+          echo "Generating Allure report..."
+          allure generate allure-results --clean -o allure-report
+          echo "Verifying report generation..."
+          ls -la allure-report/
 
       # Deploy the dashboard to gh-pages
       - name: Deploy Allure Dashboard to GitHub Pages
         if: always()  # Run this step even if previous steps failed
         uses: peaceiris/actions-gh-pages@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}  # Using default token instead of custom one
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: ./allure-report
-          keep_files: false
+          publish_dir: allure-report  # Updated path
+          commit_message: "Update Allure Report $(date +'%Y-%m-%d %H:%M:%S')"
+          force_orphan: true  # Clean up the branch on each deployment
