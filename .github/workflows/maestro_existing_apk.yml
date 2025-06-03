@@ -48,15 +48,18 @@ jobs:
           force-avd-creation: true
           emulator-boot-timeout: 900
           script: |
-            # Wait for emulator and verify it's ready
+            # Wait for emulator to be ready
             adb wait-for-device
-            sleep 30
             
             # Verify emulator is fully booted
             adb shell getprop sys.boot_completed | grep 1 || exit 1
             
             # Install APK
             adb install -r maestro-flows/drops.apk || exit 1
+            
+            # Launch the app to ensure it's ready
+            adb shell monkey -p com.example.maestro_demo -c android.intent.category.LAUNCHER 1
+            sleep 5
             
             # Create results directory
             mkdir -p allure-results
