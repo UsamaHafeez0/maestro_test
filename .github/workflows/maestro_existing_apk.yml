@@ -25,12 +25,19 @@ jobs:
       - name: Install Allure CLI
         run: npm install -g allure-commandline@2.24.1
 
-      # Verify APK exists
-      - name: Verify APK exists
+      # Verify APK exists and check its integrity
+      - name: Verify APK exists and integrity
         run: |
           if [ ! -f "maestro-flows/drops.apk" ]; then
             echo "Error: drops.apk not found in maestro-flows directory"
             exit 1
+          fi
+          echo "APK file size: $(ls -lh maestro-flows/drops.apk | awk '{print $5}')"
+          # Check if APK is valid
+          if ! aapt dump badging maestro-flows/drops.apk > /dev/null 2>&1; then
+            echo "Warning: APK may be corrupted or invalid"
+          else
+            echo "APK appears to be valid"
           fi
 
       # Launch emulator and run Maestro tests
@@ -43,27 +50,95 @@ jobs:
           target: google_apis
           profile: pixel_7
           disable-animations: true
-          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 2048 -cores 2
           avd-name: test-emulator
           force-avd-creation: true
           emulator-boot-timeout: 900
           script: |
             # Wait for emulator to be ready
+            echo "Waiting for emulator to start..."
             adb wait-for-device
             
-            # Verify emulator is fully booted
-            adb shell getprop sys.boot_completed | grep 1 || exit 1
+            # Wait longer for emulator to be fully booted
+            echo "Waiting for emulator to fully boot..."
+            timeout 300 bash -c 'until adb shell getprop sys.boot_completed | grep -q 1; do sleep 5; done'
             
-            # Install APK
-            adb install -r maestro-flows/drops.apk || exit 1
+            # Additional wait to ensure system is stable
+            echo "Waiting additional time for system stability..."
+            sleep 30
+            
+            # Check device status
+            echo "Device status:"
+            adb devices
+            adb shell getprop | grep -E "(ro.build.version|sys.boot_completed)"
+            
+            # Clear any existing app data
+            echo "Clearing any existing app data..."
+            adb shell pm clear com.nizek.drops 2>/dev/null || true
+            
+            # Install APK with retry logic
+            echo "Installing APK..."
+            MAX_RETRIES=3
+            RETRY_COUNT=0
+            
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+              echo "Install attempt $((RETRY_COUNT + 1)) of $MAX_RETRIES"
+              
+              # Kill any existing ADB server and restart
+              adb kill-server
+              sleep 5
+              adb start-server
+              sleep 5
+              adb wait-for-device
+              
+              # Try to install the APK
+              if adb install -r -t maestro-flows/drops.apk; then
+                echo "APK installed successfully!"
+                break
+              else
+                echo "Install failed, attempt $((RETRY_COUNT + 1))"
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                
+                if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                  echo "Waiting before retry..."
+                  sleep 30
+                  
+                  # Restart ADB and wait for device
+                  adb kill-server
+                  sleep 5
+                  adb start-server
+                  sleep 5
+                  adb wait-for-device
+                fi
+              fi
+            done
+            
+            if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+              echo "Failed to install APK after $MAX_RETRIES attempts"
+              exit 1
+            fi
+            
+            # Verify installation
+            echo "Verifying app installation..."
+            if adb shell pm list packages | grep -q com.nizek.drops; then
+              echo "App successfully installed"
+            else
+              echo "App installation verification failed"
+              exit 1
+            fi
             
             # Launch the app to ensure it's ready
+            echo "Launching app..."
             adb shell monkey -p com.nizek.drops -c android.intent.category.LAUNCHER 1
+            
+            # Wait for app to start
+            sleep 10
             
             # Create results directory
             mkdir -p allure-results
             
             # Run Maestro tests
+            echo "Running Maestro tests..."
             maestro test --format junit --output allure-results/$(date +%s).xml maestro-flows/a_first_open.yaml || true  # Continue even if tests fail
             
             # Verify test results were generated
