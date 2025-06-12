@@ -59,7 +59,6 @@ jobs:
             
             # Launch the app to ensure it's ready
             adb shell monkey -p com.example.maestro_demo -c android.intent.category.LAUNCHER 1
-            sleep 5
             
             # Create results directory
             mkdir -p allure-results
