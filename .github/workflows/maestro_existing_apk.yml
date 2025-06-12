@@ -58,7 +58,7 @@ jobs:
             adb install -r maestro-flows/drops.apk || exit 1
             
             # Launch the app to ensure it's ready
-            adb shell monkey -p com.example.maestro_demo -c android.intent.category.LAUNCHER 1
+            adb shell monkey -p com.nizek.drops -c android.intent.category.LAUNCHER 1
             
             # Create results directory
             mkdir -p allure-results

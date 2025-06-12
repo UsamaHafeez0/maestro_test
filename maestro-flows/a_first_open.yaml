@@ -1,7 +1,10 @@
-appId: com.example.maestro_demo
----
-- assertVisible: "0"
-- tapOn:
-    id: "Increment"
-- assertVisible: "1"
+appId: com.nizek.drops
 
+---
+# - assertVisible: "0"
+# - tapOn:
+#     id: "Increment"
+# - assertVisible: "1"
+
+- assertVisible: "Continue"
+- tapOn: "Continue"
